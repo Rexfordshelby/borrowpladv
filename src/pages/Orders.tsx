@@ -14,7 +14,7 @@ const Orders = () => {
   const { user } = useAuth();
 
   // ------------------------
-  // Fetch borrowed orders (items + services)
+  // Borrowed / Hired
   // ------------------------
   const { data: borrowedOrders } = useQuery({
     queryKey: ['borrowed-orders', user?.id],
@@ -22,26 +22,26 @@ const Orders = () => {
       if (!user?.id) return [];
 
       // Items
-      const { data: itemsData, error: itemsError } = await supabase
+      const { data: itemsData } = await supabase
         .from('orders')
         .select('*, listings(title, images), seller:profiles(name)')
         .eq('buyer_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (itemsError) console.error('Items error:', itemsError);
-
       // Services
-      const { data: servicesData, error: servicesError } = await supabase
+      const { data: servicesData } = await supabase
         .from('service_orders')
         .select('*, services(title, images), provider:profiles(name)')
         .eq('buyer_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (servicesError) console.error('Services error:', servicesError);
-
       // Format
       const formattedItems = (itemsData || []).map(o => ({ ...o, type: 'item', profiles: o.seller }));
-      const formattedServices = (servicesData || []).map(o => ({ ...o, type: 'service', profiles: o.provider }));
+      const formattedServices = (servicesData || []).map(o => ({
+        ...o,
+        type: 'service',
+        profiles: o.provider
+      }));
 
       return [...formattedItems, ...formattedServices];
     },
@@ -49,7 +49,7 @@ const Orders = () => {
   });
 
   // ------------------------
-  // Fetch lent orders (items + services)
+  // Lent / Provided
   // ------------------------
   const { data: lentOrders } = useQuery({
     queryKey: ['lent-orders', user?.id],
@@ -57,22 +57,18 @@ const Orders = () => {
       if (!user?.id) return [];
 
       // Items
-      const { data: itemsData, error: itemsError } = await supabase
+      const { data: itemsData } = await supabase
         .from('orders')
         .select('*, listings(title, images), buyer:profiles(name)')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (itemsError) console.error('Items error:', itemsError);
-
       // Services
-      const { data: servicesData, error: servicesError } = await supabase
+      const { data: servicesData } = await supabase
         .from('service_orders')
         .select('*, services(title, images), buyer:profiles(name)')
         .eq('provider_id', user.id)
         .order('created_at', { ascending: false });
-
-      if (servicesError) console.error('Services error:', servicesError);
 
       // Format
       const formattedItems = (itemsData || []).map(o => ({ ...o, type: 'item', profiles: o.buyer }));
@@ -84,7 +80,7 @@ const Orders = () => {
   });
 
   // ------------------------
-  // Status color
+  // Status badge
   // ------------------------
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -97,7 +93,7 @@ const Orders = () => {
   };
 
   // ------------------------
-  // Card component
+  // Order card
   // ------------------------
   const OrderCard = ({ order, type }: { order: any, type: 'borrowed' | 'lent' }) => (
     <Card>
@@ -122,22 +118,27 @@ const Orders = () => {
 
       <CardContent>
         <div className="space-y-2">
+          {/* Show amount if exists */}
           {order.final_amount && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Amount:</span>
               <span className="font-medium">${order.final_amount}</span>
             </div>
           )}
-          {order.quantity && (
+
+          {/* Only show quantity for items */}
+          {order.type === 'item' && order.quantity && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Quantity:</span>
               <span>{order.quantity}</span>
             </div>
           )}
+
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Ordered:</span>
             <span>{formatDistanceToNow(new Date(order.created_at))} ago</span>
           </div>
+
           {order.notes && (
             <div className="mt-2">
               <p className="text-xs text-muted-foreground">Notes:</p>
@@ -208,7 +209,7 @@ const Orders = () => {
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {borrowedOrders?.map(order => (
+                {borrowedOrders.map(order => (
                   <OrderCard key={order.id} order={order} type="borrowed" />
                 ))}
               </div>
@@ -236,7 +237,7 @@ const Orders = () => {
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {lentOrders?.map(order => (
+                {lentOrders.map(order => (
                   <OrderCard key={order.id} order={order} type="lent" />
                 ))}
               </div>
