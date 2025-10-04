@@ -316,7 +316,7 @@ const Orders = () => {
   );
 };
 
-export default Orders;          .from('service_orders')
+export default Orders;
           .select('*, services(title, images), provider:profiles(name)')
           .eq('buyer_id', user.id)
           .order('created_at', { ascending: false });
