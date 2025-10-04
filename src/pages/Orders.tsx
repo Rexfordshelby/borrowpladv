@@ -1,4 +1,4 @@
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { DashboardLayout } from '@/components/layout/DashboardLayout'; 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,85 +14,85 @@ const Orders = () => {
   const { user } = useAuth();
 
   // ------------------------
-  // Fetch borrowed orders (items + services)
+  // Fetch borrowed orders
   // ------------------------
   const { data: borrowedOrders } = useQuery({
     queryKey: ['borrowed-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
 
-      let itemsData = [], servicesData = [];
-
       try {
-        // Items
+        // Borrowed items
         const itemsRes = await supabase
           .from('orders')
           .select('*, listings(title, images), seller:profiles(name)')
           .eq('buyer_id', user.id)
           .order('created_at', { ascending: false });
-        if (itemsRes.error) throw itemsRes.error;
-        itemsData = itemsRes.data ?? [];
 
-        // Services
+        if (itemsRes.error) throw itemsRes.error;
+        const itemsData = itemsRes.data ?? [];
+
+        // Borrowed services
         const servicesRes = await supabase
           .from('service_orders')
           .select('*, services(title, images), provider:profiles(name)')
           .eq('buyer_id', user.id)
           .order('created_at', { ascending: false });
-        if (servicesRes.error) throw servicesRes.error;
-        servicesData = servicesRes.data ?? [];
 
+        if (servicesRes.error) throw servicesRes.error;
+        const servicesData = servicesRes.data ?? [];
+
+        // unify data format
+        const formattedItems = itemsData.map(o => ({ ...o, type: 'item', profiles: o.seller }));
+        const formattedServices = servicesData.map(o => ({ ...o, type: 'service', profiles: o.provider }));
+
+        return [...formattedItems, ...formattedServices];
       } catch (err) {
         console.error('Borrowed orders fetch failed:', err);
+        return [];
       }
-
-      // Format data for unified rendering
-      const formattedItems = itemsData.map(o => ({ ...o, type: 'item', profiles: o.seller }));
-      const formattedServices = servicesData.map(o => ({ ...o, type: 'service', profiles: o.provider }));
-
-      return [...formattedItems, ...formattedServices];
     },
     enabled: !!user?.id
   });
 
   // ------------------------
-  // Fetch lent orders (items + services)
+  // Fetch lent orders
   // ------------------------
   const { data: lentOrders } = useQuery({
     queryKey: ['lent-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
 
-      let itemsData = [], servicesData = [];
-
       try {
-        // Items
+        // Lent items
         const itemsRes = await supabase
           .from('orders')
           .select('*, listings(title, images), buyer:profiles(name)')
           .eq('seller_id', user.id)
           .order('created_at', { ascending: false });
-        if (itemsRes.error) throw itemsRes.error;
-        itemsData = itemsRes.data ?? [];
 
-        // Services
+        if (itemsRes.error) throw itemsRes.error;
+        const itemsData = itemsRes.data ?? [];
+
+        // Lent services
         const servicesRes = await supabase
           .from('service_orders')
           .select('*, services(title, images), buyer:profiles(name)')
           .eq('provider_id', user.id)
           .order('created_at', { ascending: false });
-        if (servicesRes.error) throw servicesRes.error;
-        servicesData = servicesRes.data ?? [];
 
+        if (servicesRes.error) throw servicesRes.error;
+        const servicesData = servicesRes.data ?? [];
+
+        // unify data format
+        const formattedItems = itemsData.map(o => ({ ...o, type: 'item', profiles: o.buyer }));
+        const formattedServices = servicesData.map(o => ({ ...o, type: 'service', profiles: o.buyer }));
+
+        return [...formattedItems, ...formattedServices];
       } catch (err) {
         console.error('Lent orders fetch failed:', err);
+        return [];
       }
-
-      // Format data for unified rendering
-      const formattedItems = itemsData.map(o => ({ ...o, type: 'item', profiles: o.buyer }));
-      const formattedServices = servicesData.map(o => ({ ...o, type: 'service', profiles: o.buyer }));
-
-      return [...formattedItems, ...formattedServices];
     },
     enabled: !!user?.id
   });
@@ -111,7 +111,7 @@ const Orders = () => {
   };
 
   // ------------------------
-  // Order card component
+  // Order card
   // ------------------------
   const OrderCard = ({ order, type }: { order: any, type: 'borrowed' | 'lent' }) => (
     <Card>
