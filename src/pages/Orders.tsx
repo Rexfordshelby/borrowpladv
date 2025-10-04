@@ -7,48 +7,78 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDistanceToNow } from 'date-fns';
-import { ShoppingBag, Package } from 'lucide-react';
+import { ShoppingBag, Package, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Orders = () => {
   const { user } = useAuth();
 
+  // Fetch borrowed orders (items + services)
   const { data: borrowedOrders } = useQuery({
     queryKey: ['borrowed-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const { data } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          listings (title, images, seller_id),
-          profiles!orders_seller_id_fkey (name)
-        `)
-        .eq('buyer_id', user.id)
-        .order('created_at', { ascending: false });
+      const [itemOrders, serviceOrders] = await Promise.all([
+        supabase
+          .from('orders')
+          .select(`
+            *,
+            listings (title, images, seller_id),
+            profiles!orders_seller_id_fkey (name)
+          `)
+          .eq('buyer_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('service_orders')
+          .select(`
+            *,
+            services (title, images, provider_id),
+            profiles!service_orders_provider_id_fkey (name)
+          `)
+          .eq('buyer_id', user.id)
+          .order('created_at', { ascending: false })
+      ]);
 
-      return data || [];
+      const formattedItems = (itemOrders.data || []).map(o => ({ ...o, type: 'item' }));
+      const formattedServices = (serviceOrders.data || []).map(o => ({ ...o, type: 'service' }));
+
+      return [...formattedItems, ...formattedServices];
     },
     enabled: !!user?.id
   });
 
+  // Fetch lent orders (items + services)
   const { data: lentOrders } = useQuery({
     queryKey: ['lent-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const { data } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          listings (title, images),
-          profiles!orders_buyer_id_fkey (name)
-        `)
-        .eq('seller_id', user.id)
-        .order('created_at', { ascending: false });
+      const [itemOrders, serviceOrders] = await Promise.all([
+        supabase
+          .from('orders')
+          .select(`
+            *,
+            listings (title, images),
+            profiles!orders_buyer_id_fkey (name)
+          `)
+          .eq('seller_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('service_orders')
+          .select(`
+            *,
+            services (title, images),
+            profiles!service_orders_buyer_id_fkey (name)
+          `)
+          .eq('provider_id', user.id)
+          .order('created_at', { ascending: false })
+      ]);
 
-      return data || [];
+      const formattedItems = (itemOrders.data || []).map(o => ({ ...o, type: 'item' }));
+      const formattedServices = (serviceOrders.data || []).map(o => ({ ...o, type: 'service' }));
+
+      return [...formattedItems, ...formattedServices];
     },
     enabled: !!user?.id
   });
@@ -69,28 +99,35 @@ const Orders = () => {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h3 className="font-semibold text-foreground">
-              {order.listings?.title}
+              {order.listings?.title || order.services?.title}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {type === 'borrowed' ? 'Borrowed from' : 'Lent to'}: {order.profiles?.name}
+              {type === 'borrowed'
+                ? (order.type === 'service' ? 'Hired from' : 'Borrowed from')
+                : (order.type === 'service' ? 'Service for' : 'Lent to')
+              }: {order.profiles?.name}
             </p>
           </div>
           <Badge variant={getStatusColor(order.status)}>
-            {order.status}
+            {order.type === 'service' ? 'Service' : 'Item'} • {order.status}
           </Badge>
         </div>
       </CardHeader>
       
       <CardContent>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Amount:</span>
-            <span className="font-medium">${order.final_amount}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Quantity:</span>
-            <span>{order.quantity}</span>
-          </div>
+          {order.final_amount && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Amount:</span>
+              <span className="font-medium">${order.final_amount}</span>
+            </div>
+          )}
+          {order.quantity && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Quantity:</span>
+              <span>{order.quantity}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Ordered:</span>
             <span>{formatDistanceToNow(new Date(order.created_at))} ago</span>
@@ -126,18 +163,18 @@ const Orders = () => {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Orders</h1>
-          <p className="text-muted-foreground">Track your borrowing and lending activity</p>
+          <p className="text-muted-foreground">Track your borrowing, lending, and service activity</p>
         </div>
 
         <Tabs defaultValue="borrowed" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="borrowed">
               <ShoppingBag className="h-4 w-4 mr-2" />
-              Borrowed ({borrowedOrders?.length || 0})
+              Borrowed / Hired ({borrowedOrders?.length || 0})
             </TabsTrigger>
             <TabsTrigger value="lent">
               <Package className="h-4 w-4 mr-2" />
-              Lent ({lentOrders?.length || 0})
+              Lent / Provided ({lentOrders?.length || 0})
             </TabsTrigger>
           </TabsList>
           
@@ -146,13 +183,18 @@ const Orders = () => {
               <Card className="text-center py-12">
                 <CardContent>
                   <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No borrowed items</h3>
+                  <h3 className="text-lg font-medium mb-2">No borrowed or hired records</h3>
                   <p className="text-muted-foreground mb-4">
-                    Start browsing to find items you need
+                    Browse items or hire services to get started
                   </p>
-                  <Link to="/browse">
-                    <Button>Browse Items</Button>
-                  </Link>
+                  <div className="flex justify-center gap-4">
+                    <Link to="/browse">
+                      <Button>Browse Items</Button>
+                    </Link>
+                    <Link to="/services">
+                      <Button variant="outline">Find Services</Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ) : (
@@ -168,14 +210,19 @@ const Orders = () => {
             {lentOrders?.length === 0 ? (
               <Card className="text-center py-12">
                 <CardContent>
-                  <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No lent items</h3>
+                  <Wrench className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No lending or service records</h3>
                   <p className="text-muted-foreground mb-4">
-                    Create listings to start sharing your items
+                    Create listings or offer your skills
                   </p>
-                  <Link to="/create-listing">
-                    <Button>Create Listing</Button>
-                  </Link>
+                  <div className="flex justify-center gap-4">
+                    <Link to="/create-listing">
+                      <Button>Create Item Listing</Button>
+                    </Link>
+                    <Link to="/create-service">
+                      <Button variant="outline">Offer a Service</Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ) : (
