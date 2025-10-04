@@ -1,5 +1,5 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,76 +13,79 @@ import { Link } from 'react-router-dom';
 const Orders = () => {
   const { user } = useAuth();
 
+  // ------------------------
   // Fetch borrowed orders (items + services)
+  // ------------------------
   const { data: borrowedOrders } = useQuery({
     queryKey: ['borrowed-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const [itemOrders, serviceOrders] = await Promise.all([
-        supabase
-          .from('orders')
-          .select(`
-            *,
-            listings (title, images, seller_id),
-            profiles!orders_seller_id_fkey (name)
-          `)
-          .eq('buyer_id', user.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('service_orders')
-          .select(`
-            *,
-            services (title, images, provider_id),
-            profiles!service_orders_provider_id_fkey (name)
-          `)
-          .eq('buyer_id', user.id)
-          .order('created_at', { ascending: false })
-      ]);
+      // Items
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('orders')
+        .select('*, listings(title, images), seller:profiles(name)')
+        .eq('buyer_id', user.id)
+        .order('created_at', { ascending: false });
 
-      const formattedItems = (itemOrders.data || []).map(o => ({ ...o, type: 'item' }));
-      const formattedServices = (serviceOrders.data || []).map(o => ({ ...o, type: 'service' }));
+      if (itemsError) console.error('Items error:', itemsError);
+
+      // Services
+      const { data: servicesData, error: servicesError } = await supabase
+        .from('service_orders')
+        .select('*, services(title, images), provider:profiles(name)')
+        .eq('buyer_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (servicesError) console.error('Services error:', servicesError);
+
+      // Format
+      const formattedItems = (itemsData || []).map(o => ({ ...o, type: 'item', profiles: o.seller }));
+      const formattedServices = (servicesData || []).map(o => ({ ...o, type: 'service', profiles: o.provider }));
 
       return [...formattedItems, ...formattedServices];
     },
     enabled: !!user?.id
   });
 
+  // ------------------------
   // Fetch lent orders (items + services)
+  // ------------------------
   const { data: lentOrders } = useQuery({
     queryKey: ['lent-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const [itemOrders, serviceOrders] = await Promise.all([
-        supabase
-          .from('orders')
-          .select(`
-            *,
-            listings (title, images),
-            profiles!orders_buyer_id_fkey (name)
-          `)
-          .eq('seller_id', user.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('service_orders')
-          .select(`
-            *,
-            services (title, images),
-            profiles!service_orders_buyer_id_fkey (name)
-          `)
-          .eq('provider_id', user.id)
-          .order('created_at', { ascending: false })
-      ]);
+      // Items
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('orders')
+        .select('*, listings(title, images), buyer:profiles(name)')
+        .eq('seller_id', user.id)
+        .order('created_at', { ascending: false });
 
-      const formattedItems = (itemOrders.data || []).map(o => ({ ...o, type: 'item' }));
-      const formattedServices = (serviceOrders.data || []).map(o => ({ ...o, type: 'service' }));
+      if (itemsError) console.error('Items error:', itemsError);
+
+      // Services
+      const { data: servicesData, error: servicesError } = await supabase
+        .from('service_orders')
+        .select('*, services(title, images), buyer:profiles(name)')
+        .eq('provider_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (servicesError) console.error('Services error:', servicesError);
+
+      // Format
+      const formattedItems = (itemsData || []).map(o => ({ ...o, type: 'item', profiles: o.buyer }));
+      const formattedServices = (servicesData || []).map(o => ({ ...o, type: 'service', profiles: o.buyer }));
 
       return [...formattedItems, ...formattedServices];
     },
     enabled: !!user?.id
   });
 
+  // ------------------------
+  // Status color
+  // ------------------------
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'default';
@@ -93,6 +96,9 @@ const Orders = () => {
     }
   };
 
+  // ------------------------
+  // Card component
+  // ------------------------
   const OrderCard = ({ order, type }: { order: any, type: 'borrowed' | 'lent' }) => (
     <Card>
       <CardHeader className="pb-2">
@@ -113,7 +119,7 @@ const Orders = () => {
           </Badge>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         <div className="space-y-2">
           {order.final_amount && (
@@ -139,7 +145,7 @@ const Orders = () => {
             </div>
           )}
         </div>
-        
+
         <div className="flex gap-2 mt-4">
           <Link to={`/orders/${order.id}`} className="flex-1">
             <Button variant="outline" size="sm" className="w-full">
@@ -158,6 +164,9 @@ const Orders = () => {
     </Card>
   );
 
+  // ------------------------
+  // Render
+  // ------------------------
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -177,7 +186,7 @@ const Orders = () => {
               Lent / Provided ({lentOrders?.length || 0})
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="borrowed" className="space-y-4">
             {borrowedOrders?.length === 0 ? (
               <Card className="text-center py-12">
@@ -199,13 +208,13 @@ const Orders = () => {
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {borrowedOrders?.map((order) => (
+                {borrowedOrders?.map(order => (
                   <OrderCard key={order.id} order={order} type="borrowed" />
                 ))}
               </div>
             )}
           </TabsContent>
-          
+
           <TabsContent value="lent" className="space-y-4">
             {lentOrders?.length === 0 ? (
               <Card className="text-center py-12">
@@ -227,7 +236,7 @@ const Orders = () => {
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {lentOrders?.map((order) => (
+                {lentOrders?.map(order => (
                   <OrderCard key={order.id} order={order} type="lent" />
                 ))}
               </div>
