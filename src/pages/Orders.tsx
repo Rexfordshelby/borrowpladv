@@ -29,10 +29,12 @@ const Orders = () => {
     setUser(data.user);
   };
 
+  // ------------------- Borrowed Orders -------------------
   const { data: borrowedOrders, refetch: refetchBorrowed } = useQuery({
     queryKey: ['borrowed-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
+
       try {
         const [itemsRes, servicesRes] = await Promise.all([
           supabase
@@ -44,6 +46,7 @@ const Orders = () => {
             `)
             .eq('buyer_id', user.id)
             .order('created_at', { ascending: false }),
+
           supabase
             .from('service_orders')
             .select(`
@@ -52,7 +55,7 @@ const Orders = () => {
               provider:profiles!service_orders_provider_id_fkey(name, avatar_url)
             `)
             .eq('buyer_id', user.id)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
         ]);
 
         if (itemsRes.error) throw itemsRes.error;
@@ -62,14 +65,14 @@ const Orders = () => {
           ...o,
           type: 'item',
           listing: o.listings,
-          otherUser: o.seller
+          otherUser: o.seller,
         }));
 
         const services = (servicesRes.data || []).map((o: any) => ({
           ...o,
           type: 'service',
           listing: o.services,
-          otherUser: o.provider
+          otherUser: o.provider,
         }));
 
         return [...items, ...services];
@@ -78,13 +81,15 @@ const Orders = () => {
         return [];
       }
     },
-    enabled: !!user?.id
+    enabled: !!user?.id,
   });
 
+  // ------------------- Lent Orders -------------------
   const { data: lentOrders, refetch: refetchLent } = useQuery({
     queryKey: ['lent-orders', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
+
       try {
         const [itemsRes, servicesRes] = await Promise.all([
           supabase
@@ -96,6 +101,7 @@ const Orders = () => {
             `)
             .eq('seller_id', user.id)
             .order('created_at', { ascending: false }),
+
           supabase
             .from('service_orders')
             .select(`
@@ -104,7 +110,7 @@ const Orders = () => {
               buyer:profiles!service_orders_buyer_id_fkey(name, avatar_url)
             `)
             .eq('provider_id', user.id)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
         ]);
 
         if (itemsRes.error) throw itemsRes.error;
@@ -114,14 +120,14 @@ const Orders = () => {
           ...o,
           type: 'item',
           listing: o.listings,
-          otherUser: o.buyer
+          otherUser: o.buyer,
         }));
 
         const services = (servicesRes.data || []).map((o: any) => ({
           ...o,
           type: 'service',
           listing: o.services,
-          otherUser: o.buyer
+          otherUser: o.buyer,
         }));
 
         return [...items, ...services];
@@ -130,18 +136,25 @@ const Orders = () => {
         return [];
       }
     },
-    enabled: !!user?.id
+    enabled: !!user?.id,
   });
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'default';
-      case 'accepted': return 'secondary';
-      case 'paid': return 'default';
-      case 'active': return 'default';
-      case 'completed': return 'outline';
-      case 'cancelled': return 'destructive';
-      default: return 'default';
+      case 'pending':
+        return 'default';
+      case 'accepted':
+        return 'secondary';
+      case 'paid':
+        return 'default';
+      case 'active':
+        return 'default';
+      case 'completed':
+        return 'outline';
+      case 'cancelled':
+        return 'destructive';
+      default:
+        return 'default';
     }
   };
 
@@ -150,11 +163,20 @@ const Orders = () => {
     refetchLent();
   };
 
-  const OrderCard = ({ order, viewType }: { order: any, viewType: 'borrowed' | 'lent' }) => {
+  // ------------------- Order Card -------------------
+  const OrderCard = ({
+    order,
+    viewType,
+  }: {
+    order: any;
+    viewType: 'borrowed' | 'lent';
+  }) => {
     const isOwner = viewType === 'lent';
     const canAcceptDeny = isOwner && order.status === 'pending';
     const canPay = !isOwner && order.status === 'accepted';
-    const canChat = ['accepted', 'paid', 'active', 'completed'].includes(order.status);
+    const canChat = ['accepted', 'paid', 'active', 'completed'].includes(
+      order.status
+    );
 
     return (
       <Card>
@@ -167,8 +189,7 @@ const Orders = () => {
               <p className="text-sm text-muted-foreground">
                 {viewType === 'borrowed'
                   ? `From: ${order.otherUser?.name || 'Unknown'}`
-                  : `To: ${order.otherUser?.name || 'Unknown'}`
-                }
+                  : `To: ${order.otherUser?.name || 'Unknown'}`}
               </p>
             </div>
             <Badge variant={getStatusColor(order.status)}>
@@ -188,7 +209,9 @@ const Orders = () => {
             {order.final_amount && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Amount:</span>
-                <span className="font-medium">${Number(order.final_amount).toFixed(2)}</span>
+                <span className="font-medium">
+                  ${Number(order.final_amount).toFixed(2)}
+                </span>
               </div>
             )}
             {order.quantity && (
@@ -199,7 +222,11 @@ const Orders = () => {
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Ordered:</span>
-              <span>{formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}</span>
+              <span>
+                {formatDistanceToNow(new Date(order.created_at), {
+                  addSuffix: true,
+                })}
+              </span>
             </div>
           </div>
 
@@ -243,14 +270,27 @@ const Orders = () => {
     );
   };
 
+  // ------------------- Render -------------------
   return (
     <AppLayout>
       <div className="space-y-6">
+        {/* Header */}
         <div className="bg-gradient-primary px-6 py-6 text-white">
           <h1 className="text-2xl font-bold">My Orders</h1>
           <p className="text-white/90">Track your orders and requests</p>
         </div>
 
+        {/* Create Listing Buttons */}
+        <div className="px-6 flex gap-4">
+          <Link to="/create-listing">
+            <Button>Create Item Listing</Button>
+          </Link>
+          <Link to="/create-service">
+            <Button variant="outline">Offer a Service</Button>
+          </Link>
+        </div>
+
+        {/* Orders Tabs */}
         <div className="px-6">
           <Tabs defaultValue="borrowed" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -268,7 +308,11 @@ const Orders = () => {
               {borrowedOrders?.length ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   {borrowedOrders.map((order: any) => (
-                    <OrderCard key={order.id} order={order} viewType="borrowed" />
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      viewType="borrowed"
+                    />
                   ))}
                 </div>
               ) : (
@@ -276,7 +320,9 @@ const Orders = () => {
                   <CardContent>
                     <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">No orders yet</h3>
-                    <p className="text-muted-foreground mb-4">Browse listings to get started</p>
+                    <p className="text-muted-foreground mb-4">
+                      Browse listings to get started
+                    </p>
                     <Link to="/home">
                       <Button>Browse Listings</Button>
                     </Link>
@@ -296,8 +342,12 @@ const Orders = () => {
                 <Card className="text-center py-12">
                   <CardContent>
                     <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No incoming orders yet</h3>
-                    <p className="text-muted-foreground mb-4">Create listings to receive orders</p>
+                    <h3 className="text-lg font-medium mb-2">
+                      No incoming orders yet
+                    </h3>
+                    <p className="text-muted-foreground mb-4">
+                      Create listings to receive orders
+                    </p>
                     <Link to="/add">
                       <Button>Create Listing</Button>
                     </Link>
